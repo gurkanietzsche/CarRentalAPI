@@ -1,0 +1,153 @@
+﻿using CarRentalAPI.DTOs;
+using CarRentalAPI.Models;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Configuration;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
+
+namespace CarRentalAPI.Services
+{
+    public class AuthService
+    {
+        private readonly UserManager<AppUser> _userManager;
+        private readonly RoleManager<IdentityRole> _roleManager;
+        private readonly IConfiguration _configuration;
+
+        public AuthService(
+            UserManager<AppUser> userManager,
+            RoleManager<IdentityRole> roleManager,
+            IConfiguration configuration)
+        {
+            _userManager = userManager;
+            _roleManager = roleManager;
+            _configuration = configuration;
+        }
+
+        public async Task<TokenDTO> LoginAsync(LoginDTO model)
+        {
+            var user = await _userManager.FindByNameAsync(model.UserName);
+            if (user == null || !await _userManager.CheckPasswordAsync(user, model.Password))
+                return null;
+
+            var userRoles = await _userManager.GetRolesAsync(user);
+            var authClaims = new List<Claim>
+            {
+                new Claim(ClaimTypes.Name, user.UserName),
+                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+                new Claim(ClaimTypes.NameIdentifier, user.Id)
+            };
+
+            foreach (var userRole in userRoles)
+            {
+                authClaims.Add(new Claim(ClaimTypes.Role, userRole));
+            }
+
+            var token = GetToken(authClaims);
+
+            return new TokenDTO
+            {
+                Token = new JwtSecurityTokenHandler().WriteToken(token),
+                Expiration = token.ValidTo
+            };
+        }
+
+        public async Task<IdentityResult> RegisterAsync(RegisterDTO model)
+        {
+            var userExists = await _userManager.FindByNameAsync(model.UserName);
+            if (userExists != null)
+                return IdentityResult.Failed(new IdentityError { Description = "User already exists" });
+
+            AppUser user = new AppUser()
+            {
+                UserName = model.UserName,
+                Email = model.Email,
+                FirstName = model.FirstName,
+                LastName = model.LastName,
+                Address = model.Address,
+                City = model.City,
+                Country = model.Country,
+                PostalCode = model.PostalCode,
+                DriverLicenseNumber = model.DriverLicenseNumber,
+                BirthDate = model.BirthDate,
+                SecurityStamp = Guid.NewGuid().ToString()
+            };
+
+            var result = await _userManager.CreateAsync(user, model.Password);
+            if (!result.Succeeded)
+                return result;
+
+            // Add to User role by default
+            if (!await _roleManager.RoleExistsAsync("User"))
+                await _roleManager.CreateAsync(new IdentityRole("User"));
+
+            await _userManager.AddToRoleAsync(user, "User");
+
+            return result;
+        }
+
+        public async Task<IdentityResult> AddToRoleAsync(string userId, string role)
+        {
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null)
+                return IdentityResult.Failed(new IdentityError { Description = "User not found" });
+
+            if (!await _roleManager.RoleExistsAsync(role))
+                await _roleManager.CreateAsync(new IdentityRole(role));
+
+            return await _userManager.AddToRoleAsync(user, role);
+        }
+
+        public async Task<IdentityResult> RemoveFromRoleAsync(string userId, string role)
+        {
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null)
+                return IdentityResult.Failed(new IdentityError { Description = "User not found" });
+
+            return await _userManager.RemoveFromRoleAsync(user, role);
+        }
+
+        public async Task<UserDTO> GetUserByIdAsync(string userId)
+        {
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null)
+                return null;
+
+            var roles = await _userManager.GetRolesAsync(user);
+
+            return new UserDTO
+            {
+                Id = user.Id,
+                UserName = user.UserName,
+                Email = user.Email,
+                FirstName = user.FirstName,
+                LastName = user.LastName,
+                Address = user.Address,
+                City = user.City,
+                Country = user.Country,
+                PostalCode = user.PostalCode,
+                DriverLicenseNumber = user.DriverLicenseNumber,
+                BirthDate = (DateTime)user.BirthDate,
+                CreatedDate = user.CreatedDate,
+                IsActive = user.IsActive,
+                Roles = roles.ToList()
+            };
+        }
+
+        private JwtSecurityToken GetToken(List<Claim> authClaims)
+        {
+            var authSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JWT:Secret"]));
+
+            var token = new JwtSecurityToken(
+                issuer: _configuration["JWT:ValidIssuer"],
+                audience: _configuration["JWT:ValidAudience"],
+                expires: DateTime.Now.AddHours(3),
+                claims: authClaims,
+                signingCredentials: new SigningCredentials(authSigningKey, SecurityAlgorithms.HmacSha256)
+            );
+
+            return token;
+        }
+    }
+}
