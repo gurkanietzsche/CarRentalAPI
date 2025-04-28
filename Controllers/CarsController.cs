@@ -1,4 +1,5 @@
-﻿using CarRentalAPI.DTOs;
+﻿using AutoMapper;
+using CarRentalAPI.DTOs;
 using CarRentalAPI.Models;
 using CarRentalAPI.Repositories;
 using Microsoft.AspNetCore.Authorization;
@@ -11,38 +12,19 @@ namespace CarRentalAPI.Controllers
     public class CarsController : ControllerBase
     {
         private readonly CarRepository _carRepository;
+        private readonly IMapper _mapper;
 
-        public CarsController(CarRepository carRepository)
+        public CarsController(CarRepository carRepository, IMapper mapper)
         {
             _carRepository = carRepository;
+            _mapper = mapper;
         }
 
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
             var cars = await _carRepository.GetAllWithCategoryAsync();
-            var carDtos = cars.Select(c => new CarDTO
-            {
-                Id = c.Id,
-                Brand = c.Brand,
-                Model = c.Model,
-                Year = c.Year,
-                Color = c.Color,
-                LicensePlate = c.LicensePlate,
-                DailyRate = c.DailyRate,
-                IsAvailable = c.IsAvailable,
-                ImageUrl = c.ImageUrl,
-                Description = c.Description,
-                Mileage = c.Mileage,
-                FuelType = c.FuelType,
-                Transmission = c.Transmission,
-                Seats = c.Seats,
-                HasAC = c.HasAC,
-                HasGPS = c.HasGPS,
-                CategoryId = c.CategoryId,
-                CategoryName = c.Category?.Name
-            });
-
+            var carDtos = _mapper.Map<IEnumerable<CarDTO>>(cars);
             return Ok(carDtos);
         }
 
@@ -53,28 +35,7 @@ namespace CarRentalAPI.Controllers
             if (car == null)
                 return NotFound();
 
-            var carDto = new CarDTO
-            {
-                Id = car.Id,
-                Brand = car.Brand,
-                Model = car.Model,
-                Year = car.Year,
-                Color = car.Color,
-                LicensePlate = car.LicensePlate,
-                DailyRate = car.DailyRate,
-                IsAvailable = car.IsAvailable,
-                ImageUrl = car.ImageUrl,
-                Description = car.Description,
-                Mileage = car.Mileage,
-                FuelType = car.FuelType,
-                Transmission = car.Transmission,
-                Seats = car.Seats,
-                HasAC = car.HasAC,
-                HasGPS = car.HasGPS,
-                CategoryId = car.CategoryId,
-                CategoryName = car.Category?.Name
-            };
-
+            var carDto = _mapper.Map<CarDTO>(car);
             return Ok(carDto);
         }
 
@@ -82,28 +43,7 @@ namespace CarRentalAPI.Controllers
         public async Task<IActionResult> GetAvailableCars([FromQuery] DateTime startDate, [FromQuery] DateTime endDate)
         {
             var cars = await _carRepository.GetAvailableCarsAsync(startDate, endDate);
-            var carDtos = cars.Select(c => new CarDTO
-            {
-                Id = c.Id,
-                Brand = c.Brand,
-                Model = c.Model,
-                Year = c.Year,
-                Color = c.Color,
-                LicensePlate = c.LicensePlate,
-                DailyRate = c.DailyRate,
-                IsAvailable = c.IsAvailable,
-                ImageUrl = c.ImageUrl,
-                Description = c.Description,
-                Mileage = c.Mileage,
-                FuelType = c.FuelType,
-                Transmission = c.Transmission,
-                Seats = c.Seats,
-                HasAC = c.HasAC,
-                HasGPS = c.HasGPS,
-                CategoryId = c.CategoryId,
-                CategoryName = c.Category?.Name
-            });
-
+            var carDtos = _mapper.Map<IEnumerable<CarDTO>>(cars);
             return Ok(carDtos);
         }
 
@@ -111,28 +51,7 @@ namespace CarRentalAPI.Controllers
         public async Task<IActionResult> GetCarsByCategory(int categoryId)
         {
             var cars = await _carRepository.GetCarsByCategoryAsync(categoryId);
-            var carDtos = cars.Select(c => new CarDTO
-            {
-                Id = c.Id,
-                Brand = c.Brand,
-                Model = c.Model,
-                Year = c.Year,
-                Color = c.Color,
-                LicensePlate = c.LicensePlate,
-                DailyRate = c.DailyRate,
-                IsAvailable = c.IsAvailable,
-                ImageUrl = c.ImageUrl,
-                Description = c.Description,
-                Mileage = c.Mileage,
-                FuelType = c.FuelType,
-                Transmission = c.Transmission,
-                Seats = c.Seats,
-                HasAC = c.HasAC,
-                HasGPS = c.HasGPS,
-                CategoryId = c.CategoryId,
-                CategoryName = c.Category?.Name
-            });
-
+            var carDtos = _mapper.Map<IEnumerable<CarDTO>>(cars);
             return Ok(carDtos);
         }
 
@@ -140,28 +59,13 @@ namespace CarRentalAPI.Controllers
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] CarCreateDTO carDto)
         {
-            var car = new Car
-            {
-                Brand = carDto.Brand,
-                Model = carDto.Model,
-                Year = carDto.Year,
-                Color = carDto.Color,
-                LicensePlate = carDto.LicensePlate,
-                DailyRate = carDto.DailyRate,
-                IsAvailable = true,
-                ImageUrl = carDto.ImageUrl,
-                Description = carDto.Description,
-                Mileage = carDto.Mileage,
-                FuelType = carDto.FuelType,
-                Transmission = carDto.Transmission,
-                Seats = carDto.Seats,
-                HasAC = carDto.HasAC,
-                HasGPS = carDto.HasGPS,
-                CategoryId = carDto.CategoryId
-            };
+            var car = _mapper.Map<Car>(carDto);
+            car.IsAvailable = true;
 
             await _carRepository.AddAsync(car);
-            return CreatedAtAction(nameof(GetById), new { id = car.Id }, car);
+            var carResultDto = _mapper.Map<CarDTO>(car);
+
+            return CreatedAtAction(nameof(GetById), new { id = car.Id }, carResultDto);
         }
 
         [Authorize(Roles = "Admin")]
@@ -172,24 +76,9 @@ namespace CarRentalAPI.Controllers
             if (existingCar == null)
                 return NotFound();
 
-            existingCar.Brand = carDto.Brand;
-            existingCar.Model = carDto.Model;
-            existingCar.Year = carDto.Year;
-            existingCar.Color = carDto.Color;
-            existingCar.LicensePlate = carDto.LicensePlate;
-            existingCar.DailyRate = carDto.DailyRate;
-            existingCar.IsAvailable = carDto.IsAvailable;
-            existingCar.ImageUrl = carDto.ImageUrl;
-            existingCar.Description = carDto.Description;
-            existingCar.Mileage = carDto.Mileage;
-            existingCar.FuelType = carDto.FuelType;
-            existingCar.Transmission = carDto.Transmission;
-            existingCar.Seats = carDto.Seats;
-            existingCar.HasAC = carDto.HasAC;
-            existingCar.HasGPS = carDto.HasGPS;
-            existingCar.CategoryId = carDto.CategoryId;
-
+            _mapper.Map(carDto, existingCar);
             await _carRepository.UpdateAsync(existingCar);
+
             return NoContent();
         }
 

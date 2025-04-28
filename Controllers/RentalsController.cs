@@ -1,4 +1,5 @@
 ﻿using System.Security.Claims;
+using AutoMapper;
 using CarRentalAPI.DTOs;
 using CarRentalAPI.Models;
 using CarRentalAPI.Repositories;
@@ -14,11 +15,13 @@ namespace CarRentalAPI.Controllers
     {
         private readonly RentalRepository _rentalRepository;
         private readonly CarRepository _carRepository;
+        private readonly IMapper _mapper;
 
-        public RentalsController(RentalRepository rentalRepository, CarRepository carRepository)
+        public RentalsController(RentalRepository rentalRepository, CarRepository carRepository, IMapper mapper)
         {
             _rentalRepository = rentalRepository;
             _carRepository = carRepository;
+            _mapper = mapper;
         }
 
         [HttpGet]
@@ -26,22 +29,7 @@ namespace CarRentalAPI.Controllers
         public async Task<IActionResult> GetAll()
         {
             var rentals = await _rentalRepository.GetAllWithDetailsAsync();
-            var rentalDtos = rentals.Select(r => new RentalDTO
-            {
-                Id = r.Id,
-                StartDate = r.StartDate,
-                EndDate = r.EndDate,
-                TotalPrice = r.TotalPrice,
-                Status = r.Status,
-                PickupLocation = r.PickupLocation,
-                ReturnLocation = r.ReturnLocation,
-                CarId = r.CarId,
-                UserId = r.UserId,
-                CarBrand = r.Car?.Brand,
-                CarModel = r.Car?.Model,
-                UserName = $"{r.User?.FirstName} {r.User?.LastName}"
-            });
-
+            var rentalDtos = _mapper.Map<IEnumerable<RentalDTO>>(rentals);
             return Ok(rentalDtos);
         }
 
@@ -57,22 +45,7 @@ namespace CarRentalAPI.Controllers
             if (rental.UserId != userId && !User.IsInRole("Admin"))
                 return Forbid();
 
-            var rentalDto = new RentalDTO
-            {
-                Id = rental.Id,
-                StartDate = rental.StartDate,
-                EndDate = rental.EndDate,
-                TotalPrice = rental.TotalPrice,
-                Status = rental.Status,
-                PickupLocation = rental.PickupLocation,
-                ReturnLocation = rental.ReturnLocation,
-                CarId = rental.CarId,
-                UserId = rental.UserId,
-                CarBrand = rental.Car?.Brand,
-                CarModel = rental.Car?.Model,
-                UserName = $"{rental.User?.FirstName} {rental.User?.LastName}"
-            };
-
+            var rentalDto = _mapper.Map<RentalDTO>(rental);
             return Ok(rentalDto);
         }
 
@@ -81,21 +54,7 @@ namespace CarRentalAPI.Controllers
         {
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             var rentals = await _rentalRepository.GetUserRentalsAsync(userId);
-            var rentalDtos = rentals.Select(r => new RentalDTO
-            {
-                Id = r.Id,
-                StartDate = r.StartDate,
-                EndDate = r.EndDate,
-                TotalPrice = r.TotalPrice,
-                Status = r.Status,
-                PickupLocation = r.PickupLocation,
-                ReturnLocation = r.ReturnLocation,
-                CarId = r.CarId,
-                UserId = r.UserId,
-                CarBrand = r.Car?.Brand,
-                CarModel = r.Car?.Model
-            });
-
+            var rentalDtos = _mapper.Map<IEnumerable<RentalDTO>>(rentals);
             return Ok(rentalDtos);
         }
 
@@ -104,20 +63,7 @@ namespace CarRentalAPI.Controllers
         public async Task<IActionResult> GetCarRentals(int carId)
         {
             var rentals = await _rentalRepository.GetCarRentalsAsync(carId);
-            var rentalDtos = rentals.Select(r => new RentalDTO
-            {
-                Id = r.Id,
-                StartDate = r.StartDate,
-                EndDate = r.EndDate,
-                TotalPrice = r.TotalPrice,
-                Status = r.Status,
-                PickupLocation = r.PickupLocation,
-                ReturnLocation = r.ReturnLocation,
-                CarId = r.CarId,
-                UserId = r.UserId,
-                UserName = $"{r.User?.FirstName} {r.User?.LastName}"
-            });
-
+            var rentalDtos = _mapper.Map<IEnumerable<RentalDTO>>(rentals);
             return Ok(rentalDtos);
         }
 
@@ -137,20 +83,15 @@ namespace CarRentalAPI.Controllers
             var days = (rentalDto.EndDate - rentalDto.StartDate).Days + 1;
             var totalPrice = days * car.DailyRate;
 
-            var rental = new Rental
-            {
-                StartDate = rentalDto.StartDate,
-                EndDate = rentalDto.EndDate,
-                TotalPrice = totalPrice,
-                Status = "Reserved",
-                PickupLocation = rentalDto.PickupLocation,
-                ReturnLocation = rentalDto.ReturnLocation,
-                CarId = rentalDto.CarId,
-                UserId = userId
-            };
+            var rental = _mapper.Map<Rental>(rentalDto);
+            rental.UserId = userId;
+            rental.TotalPrice = totalPrice;
+            rental.Status = "Reserved";
 
             await _rentalRepository.AddAsync(rental);
-            return CreatedAtAction(nameof(GetById), new { id = rental.Id }, rental);
+            var rentalResultDto = _mapper.Map<RentalDTO>(rental);
+
+            return CreatedAtAction(nameof(GetById), new { id = rental.Id }, rentalResultDto);
         }
 
         [HttpPut]
@@ -177,13 +118,9 @@ namespace CarRentalAPI.Controllers
                 existingRental.TotalPrice = days * car.DailyRate;
             }
 
-            existingRental.StartDate = rentalDto.StartDate;
-            existingRental.EndDate = rentalDto.EndDate;
-            existingRental.Status = rentalDto.Status;
-            existingRental.PickupLocation = rentalDto.PickupLocation;
-            existingRental.ReturnLocation = rentalDto.ReturnLocation;
-
+            _mapper.Map(rentalDto, existingRental);
             await _rentalRepository.UpdateAsync(existingRental);
+
             return NoContent();
         }
 

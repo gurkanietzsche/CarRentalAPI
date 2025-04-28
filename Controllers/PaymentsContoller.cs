@@ -1,4 +1,5 @@
 ﻿using System.Security.Claims;
+using AutoMapper;
 using CarRentalAPI.DTOs;
 using CarRentalAPI.Models;
 using CarRentalAPI.Repositories;
@@ -14,13 +15,16 @@ namespace CarRentalAPI.Controllers
     {
         private readonly GenericRepository<Payment> _paymentRepository;
         private readonly RentalRepository _rentalRepository;
+        private readonly IMapper _mapper;
 
         public PaymentsController(
             GenericRepository<Payment> paymentRepository,
-            RentalRepository rentalRepository)
+            RentalRepository rentalRepository,
+            IMapper mapper)
         {
             _paymentRepository = paymentRepository;
             _rentalRepository = rentalRepository;
+            _mapper = mapper;
         }
 
         [HttpGet]
@@ -28,17 +32,7 @@ namespace CarRentalAPI.Controllers
         public async Task<IActionResult> GetAll()
         {
             var payments = await _paymentRepository.GetAllAsync();
-            var paymentDtos = payments.Select(p => new PaymentDTO
-            {
-                Id = p.Id,
-                Amount = p.Amount,
-                PaymentDate = p.PaymentDate,
-                PaymentMethod = p.PaymentMethod,
-                Status = p.Status,
-                TransactionId = p.TransactionId,
-                RentalId = p.RentalId
-            });
-
+            var paymentDtos = _mapper.Map<IEnumerable<PaymentDTO>>(payments);
             return Ok(paymentDtos);
         }
 
@@ -55,17 +49,7 @@ namespace CarRentalAPI.Controllers
             if (rental.UserId != userId && !User.IsInRole("Admin"))
                 return Forbid();
 
-            var paymentDto = new PaymentDTO
-            {
-                Id = payment.Id,
-                Amount = payment.Amount,
-                PaymentDate = payment.PaymentDate,
-                PaymentMethod = payment.PaymentMethod,
-                Status = payment.Status,
-                TransactionId = payment.TransactionId,
-                RentalId = payment.RentalId
-            };
-
+            var paymentDto = _mapper.Map<PaymentDTO>(payment);
             return Ok(paymentDto);
         }
 
@@ -83,15 +67,10 @@ namespace CarRentalAPI.Controllers
             // In a real-world scenario, here you would integrate with a payment processor
             // For simplicity, we'll just create a payment record
 
-            var payment = new Payment
-            {
-                Amount = paymentDto.Amount,
-                PaymentDate = DateTime.Now,
-                PaymentMethod = paymentDto.PaymentMethod,
-                Status = "Completed", // In real world, this would be based on payment processor response
-                TransactionId = Guid.NewGuid().ToString(),
-                RentalId = paymentDto.RentalId
-            };
+            var payment = _mapper.Map<Payment>(paymentDto);
+            payment.PaymentDate = DateTime.Now;
+            payment.Status = "Completed"; // In real world, this would be based on payment processor response
+            payment.TransactionId = Guid.NewGuid().ToString();
 
             await _paymentRepository.AddAsync(payment);
 
@@ -99,7 +78,8 @@ namespace CarRentalAPI.Controllers
             rental.Status = "Paid";
             await _rentalRepository.UpdateAsync(rental);
 
-            return CreatedAtAction(nameof(GetById), new { id = payment.Id }, payment);
+            var paymentResultDto = _mapper.Map<PaymentDTO>(payment);
+            return CreatedAtAction(nameof(GetById), new { id = payment.Id }, paymentResultDto);
         }
 
         [HttpPut]
@@ -110,8 +90,7 @@ namespace CarRentalAPI.Controllers
             if (existingPayment == null)
                 return NotFound();
 
-            existingPayment.Status = paymentDto.Status;
-            existingPayment.TransactionId = paymentDto.TransactionId;
+            _mapper.Map(paymentDto, existingPayment);
             existingPayment.ModifiedDate = DateTime.Now;
 
             await _paymentRepository.UpdateAsync(existingPayment);

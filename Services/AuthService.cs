@@ -1,4 +1,5 @@
-﻿using CarRentalAPI.DTOs;
+﻿using AutoMapper;
+using CarRentalAPI.DTOs;
 using CarRentalAPI.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
@@ -14,15 +15,18 @@ namespace CarRentalAPI.Services
         private readonly UserManager<AppUser> _userManager;
         private readonly RoleManager<IdentityRole> _roleManager;
         private readonly IConfiguration _configuration;
+        private readonly IMapper _mapper;
 
         public AuthService(
             UserManager<AppUser> userManager,
             RoleManager<IdentityRole> roleManager,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            IMapper mapper)
         {
             _userManager = userManager;
             _roleManager = roleManager;
             _configuration = configuration;
+            _mapper = mapper;
         }
 
         public async Task<TokenDTO> LoginAsync(LoginDTO model)
@@ -59,20 +63,8 @@ namespace CarRentalAPI.Services
             if (userExists != null)
                 return IdentityResult.Failed(new IdentityError { Description = "User already exists" });
 
-            AppUser user = new AppUser()
-            {
-                UserName = model.UserName,
-                Email = model.Email,
-                FirstName = model.FirstName,
-                LastName = model.LastName,
-                Address = model.Address,
-                City = model.City,
-                Country = model.Country,
-                PostalCode = model.PostalCode,
-                DriverLicenseNumber = model.DriverLicenseNumber,
-                BirthDate = model.BirthDate,
-                SecurityStamp = Guid.NewGuid().ToString()
-            };
+            var user = _mapper.Map<AppUser>(model);
+            user.SecurityStamp = Guid.NewGuid().ToString();
 
             var result = await _userManager.CreateAsync(user, model.Password);
             if (!result.Succeeded)
@@ -115,24 +107,10 @@ namespace CarRentalAPI.Services
                 return null;
 
             var roles = await _userManager.GetRolesAsync(user);
+            var userDto = _mapper.Map<UserDTO>(user);
+            userDto.Roles = roles.ToList();
 
-            return new UserDTO
-            {
-                Id = user.Id,
-                UserName = user.UserName,
-                Email = user.Email,
-                FirstName = user.FirstName,
-                LastName = user.LastName,
-                Address = user.Address,
-                City = user.City,
-                Country = user.Country,
-                PostalCode = user.PostalCode,
-                DriverLicenseNumber = user.DriverLicenseNumber,
-                BirthDate = (DateTime)user.BirthDate,
-                CreatedDate = user.CreatedDate,
-                IsActive = user.IsActive,
-                Roles = roles.ToList()
-            };
+            return userDto;
         }
 
         private JwtSecurityToken GetToken(List<Claim> authClaims)

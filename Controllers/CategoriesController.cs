@@ -1,4 +1,5 @@
-﻿using CarRentalAPI.DTOs;
+﻿using AutoMapper;
+using CarRentalAPI.DTOs;
 using CarRentalAPI.Models;
 using CarRentalAPI.Repositories;
 using Microsoft.AspNetCore.Authorization;
@@ -11,23 +12,19 @@ namespace CarRentalAPI.Controllers
     public class CategoriesController : ControllerBase
     {
         private readonly GenericRepository<CarCategory> _categoryRepository;
+        private readonly IMapper _mapper;
 
-        public CategoriesController(GenericRepository<CarCategory> categoryRepository)
+        public CategoriesController(GenericRepository<CarCategory> categoryRepository, IMapper mapper)
         {
             _categoryRepository = categoryRepository;
+            _mapper = mapper;
         }
 
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
             var categories = await _categoryRepository.GetAllAsync();
-            var categoryDtos = categories.Select(c => new CategoryDTO
-            {
-                Id = c.Id,
-                Name = c.Name,
-                Description = c.Description
-            });
-
+            var categoryDtos = _mapper.Map<IEnumerable<CategoryDTO>>(categories);
             return Ok(categoryDtos);
         }
 
@@ -38,13 +35,7 @@ namespace CarRentalAPI.Controllers
             if (category == null)
                 return NotFound();
 
-            var categoryDto = new CategoryDTO
-            {
-                Id = category.Id,
-                Name = category.Name,
-                Description = category.Description
-            };
-
+            var categoryDto = _mapper.Map<CategoryDTO>(category);
             return Ok(categoryDto);
         }
 
@@ -52,14 +43,11 @@ namespace CarRentalAPI.Controllers
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] CategoryCreateDTO categoryDto)
         {
-            var category = new CarCategory
-            {
-                Name = categoryDto.Name,
-                Description = categoryDto.Description
-            };
-
+            var category = _mapper.Map<CarCategory>(categoryDto);
             await _categoryRepository.AddAsync(category);
-            return CreatedAtAction(nameof(GetById), new { id = category.Id }, category);
+
+            var categoryResultDto = _mapper.Map<CategoryDTO>(category);
+            return CreatedAtAction(nameof(GetById), new { id = category.Id }, categoryResultDto);
         }
 
         [Authorize(Roles = "Admin")]
@@ -70,10 +58,9 @@ namespace CarRentalAPI.Controllers
             if (existingCategory == null)
                 return NotFound();
 
-            existingCategory.Name = categoryDto.Name;
-            existingCategory.Description = categoryDto.Description;
-
+            _mapper.Map(categoryDto, existingCategory);
             await _categoryRepository.UpdateAsync(existingCategory);
+
             return NoContent();
         }
 

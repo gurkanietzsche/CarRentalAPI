@@ -1,4 +1,5 @@
-﻿using CarRentalAPI.DTOs;
+﻿using AutoMapper;
+using CarRentalAPI.DTOs;
 using CarRentalAPI.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -11,10 +12,12 @@ namespace CarRentalAPI.Controllers
     public class AuthController : ControllerBase
     {
         private readonly AuthService _authService;
+        private readonly IMapper _mapper;
 
-        public AuthController(AuthService authService)
+        public AuthController(AuthService authService, IMapper mapper)
         {
             _authService = authService;
+            _mapper = mapper;
         }
 
         [HttpPost("login")]

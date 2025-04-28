@@ -1,4 +1,5 @@
 ﻿using System.Security.Claims;
+using AutoMapper;
 using CarRentalAPI.DTOs;
 using CarRentalAPI.Models;
 using CarRentalAPI.Repositories;
@@ -13,29 +14,20 @@ namespace CarRentalAPI.Controllers
     {
         private readonly ReviewRepository _reviewRepository;
         private readonly RentalRepository _rentalRepository;
+        private readonly IMapper _mapper;
 
-        public ReviewsController(ReviewRepository reviewRepository, RentalRepository rentalRepository)
+        public ReviewsController(ReviewRepository reviewRepository, RentalRepository rentalRepository, IMapper mapper)
         {
             _reviewRepository = reviewRepository;
             _rentalRepository = rentalRepository;
+            _mapper = mapper;
         }
 
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
             var reviews = await _reviewRepository.GetAllWithDetailsAsync();
-            var reviewDtos = reviews.Select(r => new ReviewDTO
-            {
-                Id = r.Id,
-                Rating = r.Rating,
-                Comment = r.Comment,
-                CarId = r.CarId,
-                UserId = r.UserId,
-                UserName = r.User?.UserName,
-                CarBrand = r.Car?.Brand,
-                CarModel = r.Car?.Model
-            });
-
+            var reviewDtos = _mapper.Map<IEnumerable<ReviewDTO>>(reviews);
             return Ok(reviewDtos);
         }
 
@@ -46,18 +38,7 @@ namespace CarRentalAPI.Controllers
             if (review == null)
                 return NotFound();
 
-            var reviewDto = new ReviewDTO
-            {
-                Id = review.Id,
-                Rating = review.Rating,
-                Comment = review.Comment,
-                CarId = review.CarId,
-                UserId = review.UserId,
-                UserName = review.User?.UserName,
-                CarBrand = review.Car?.Brand,
-                CarModel = review.Car?.Model
-            };
-
+            var reviewDto = _mapper.Map<ReviewDTO>(review);
             return Ok(reviewDto);
         }
 
@@ -65,16 +46,7 @@ namespace CarRentalAPI.Controllers
         public async Task<IActionResult> GetCarReviews(int carId)
         {
             var reviews = await _reviewRepository.GetCarReviewsAsync(carId);
-            var reviewDtos = reviews.Select(r => new ReviewDTO
-            {
-                Id = r.Id,
-                Rating = r.Rating,
-                Comment = r.Comment,
-                CarId = r.CarId,
-                UserId = r.UserId,
-                UserName = r.User?.UserName
-            });
-
+            var reviewDtos = _mapper.Map<IEnumerable<ReviewDTO>>(reviews);
             return Ok(reviewDtos);
         }
 
@@ -84,17 +56,7 @@ namespace CarRentalAPI.Controllers
         {
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             var reviews = await _reviewRepository.GetUserReviewsAsync(userId);
-            var reviewDtos = reviews.Select(r => new ReviewDTO
-            {
-                Id = r.Id,
-                Rating = r.Rating,
-                Comment = r.Comment,
-                CarId = r.CarId,
-                UserId = r.UserId,
-                CarBrand = r.Car?.Brand,
-                CarModel = r.Car?.Model
-            });
-
+            var reviewDtos = _mapper.Map<IEnumerable<ReviewDTO>>(reviews);
             return Ok(reviewDtos);
         }
 
@@ -115,16 +77,13 @@ namespace CarRentalAPI.Controllers
             if (reviewDto.Rating < 1 || reviewDto.Rating > 5)
                 return BadRequest(new { Message = "Rating must be between 1 and 5" });
 
-            var review = new Review
-            {
-                Rating = reviewDto.Rating,
-                Comment = reviewDto.Comment,
-                CarId = reviewDto.CarId,
-                UserId = userId
-            };
+            var review = _mapper.Map<Review>(reviewDto);
+            review.UserId = userId;
 
             await _reviewRepository.AddAsync(review);
-            return CreatedAtAction(nameof(GetById), new { id = review.Id }, review);
+            var reviewResultDto = _mapper.Map<ReviewDTO>(review);
+
+            return CreatedAtAction(nameof(GetById), new { id = review.Id }, reviewResultDto);
         }
 
         [Authorize]
@@ -143,10 +102,9 @@ namespace CarRentalAPI.Controllers
             if (reviewDto.Rating < 1 || reviewDto.Rating > 5)
                 return BadRequest(new { Message = "Rating must be between 1 and 5" });
 
-            existingReview.Rating = reviewDto.Rating;
-            existingReview.Comment = reviewDto.Comment;
-
+            _mapper.Map(reviewDto, existingReview);
             await _reviewRepository.UpdateAsync(existingReview);
+
             return NoContent();
         }
 
